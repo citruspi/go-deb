@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/blakesmith/ar"
+	"github.com/ulikunitz/xz"
 )
 
 func normalizeArchivedFileName(s string) string {
@@ -17,7 +18,7 @@ func normalizeArchivedFileName(s string) string {
 	return strings.TrimSuffix(s, "/")
 }
 
-// Returns contents of 'control' file within 'control_data.tar.gz'
+// Returns contents of 'control' file within 'control.tar.(gz|xz)'
 // archive in a deb package
 func ReadControlDataBytes(reader io.Reader) ([]byte, int64, error) {
 	var found bool
@@ -25,6 +26,7 @@ func ReadControlDataBytes(reader io.Reader) ([]byte, int64, error) {
 	var err error
 	var ctrBuf bytes.Buffer
 	var debBuf bytes.Buffer
+	var compressionMode string
 
 	debReader := ar.NewReader(reader)
 
@@ -41,7 +43,15 @@ func ReadControlDataBytes(reader io.Reader) ([]byte, int64, error) {
 
 		name := normalizeArchivedFileName(header.Name)
 
-		if name == "control.tar.gz" {
+		if strings.HasPrefix(name, "control.") {
+			if strings.HasSuffix(name, ".tar.gz") {
+				compressionMode = "tar-gz"
+			} else if strings.HasSuffix(name, ".tar.xz") {
+				compressionMode = "tar-xz"
+			} else {
+				return nil, num, errors.New("unsupported control archive compression")
+			}
+
 			num, err = io.Copy(&debBuf, debReader)
 		}
 	}
@@ -52,13 +62,20 @@ func ReadControlDataBytes(reader io.Reader) ([]byte, int64, error) {
 
 	num = 0
 
-	gzipReader, err := gzip.NewReader(bytes.NewReader(debBuf.Bytes()))
+	var cmpReader io.Reader
+
+	switch compressionMode {
+	case "tar-gz":
+		cmpReader, err = gzip.NewReader(bytes.NewReader(debBuf.Bytes()))
+	case "tar-xz":
+		cmpReader, err = xz.NewReader(bytes.NewReader(debBuf.Bytes()))
+	}
 
 	if err != nil {
 		return nil, 0, err
 	}
 
-	tarReader := tar.NewReader(gzipReader)
+	tarReader := tar.NewReader(cmpReader)
 
 	for {
 		hdr, err := tarReader.Next()
