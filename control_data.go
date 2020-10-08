@@ -6,9 +6,16 @@ import (
 	"compress/gzip"
 	"errors"
 	"io"
+	"strings"
 
 	"github.com/blakesmith/ar"
 )
+
+func normalizeArchivedFileName(s string) string {
+	s = strings.TrimPrefix(s, "/")
+
+	return strings.TrimSuffix(s, "/")
+}
 
 // Returns contents of 'control' file within 'control_data.tar.gz'
 // archive in a deb package
@@ -32,7 +39,9 @@ func ReadControlDataBytes(reader io.Reader) ([]byte, int64, error) {
 			return nil, num, err
 		}
 
-		if header.Name == "control.tar.gz/" {
+		name := normalizeArchivedFileName(header.Name)
+
+		if name == "control.tar.gz" {
 			num, err = io.Copy(&debBuf, debReader)
 		}
 	}
