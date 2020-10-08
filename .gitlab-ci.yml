@@ -1,0 +1,22 @@
+image:
+  name: img.doom.fm/build/golang:latest-1.14.5-buster
+stages:
+  - test
+
+fmt:
+  stage: test
+  script:
+    - go fmt
+
+vet:
+  stage: test
+  script:
+    - go vet -c 3
+
+test:
+  stage: test
+  before_script:
+    - curl -O http://ftp.us.debian.org/debian/pool/main/t/tar/tar_1.30+dfsg-6_amd64.deb
+    - export TEST_PKG="tar_1.30+dfsg-6_amd64.deb"
+  script:
+    - go test -v
